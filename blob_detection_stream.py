@@ -92,18 +92,10 @@ class Camera:
         # Initiate FAST object with default values
         fast = cv2.FastFeatureDetector_create()
 
-        # find and draw the keypoints
-        # print type(img)
-        # print type(fast)
         keypoints = fast.detect(img,None)
-        # print [point.pt for point in kp]
         img2 = cv2.drawKeypoints(img, keypoints, img, color=(255,0,0))
 
-        # Print all default params
-        # print "Total Keypoints with nonmaxSuppression: ", len(keypoints)
-
         kp_coords = [point.pt for point in keypoints]
-        # print kp_coords
 
         for kp in kp_coords:
             x = int(kp[0])

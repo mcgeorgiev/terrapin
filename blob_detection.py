@@ -113,5 +113,5 @@ def fast(filename):
 
 
 if "__main__" == __name__:
-    filename = 'objects.jpg'
+    filename = 'chair.jpg'
     fast(filename)
