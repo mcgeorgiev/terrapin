@@ -64,7 +64,10 @@ def fast(filename):
     fast = cv2.FastFeatureDetector_create()
 
     # find and draw the keypoints
+    print type(img)
+    print type(fast)
     kp = fast.detect(img,None)
+    print [point.pt for point in kp]
     img2 = cv2.drawKeypoints(img, kp, img, color=(255,0,0))
 
     # Print all default params
@@ -77,7 +80,7 @@ def fast(filename):
 
 
 if "__main__" == __name__:
-    filename = 'objects.jpg'
+    filename = 'chair.jpg'
     fast(filename)
     # better_harris(filename)
     # harris_corner_detection(filename)
