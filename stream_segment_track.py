@@ -5,6 +5,7 @@ import numpy as np
 import time
 from skimage import morphology
 from skimage.filters import threshold_otsu
+import names
 
 DEBUG = False
 MIN_MATCH_COUNT = 10
@@ -70,6 +71,9 @@ def debug_show(frame, reshaped_img):
     plt.axis('off')
     plt.show()
 
+def new_name():
+    return str(names.get_full_name())
+
 class Box:
     def __init__(self, x, y, w, h):
         self.x = x
@@ -82,11 +86,11 @@ class Box:
         self.crop = frame[self.x:self.x+self.w, self.y:self.y+self.h]
 
     def is_match(self, previous_crop):
-        if previous_crop.size == 0:
+        if previous_crop.crop.size == 0:
             return
 
         sift = cv2.xfeatures2d.SIFT_create()
-        kp1, des1 = sift.detectAndCompute(previous_crop,None)
+        kp1, des1 = sift.detectAndCompute(previous_crop.crop,None)
         kp2, des2 = sift.detectAndCompute(self.crop,None)
         FLANN_INDEX_KDTREE = 0
         index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
@@ -109,12 +113,30 @@ class Box:
             print "Not enough matches are found - %d/%d" % (len(good),MIN_MATCH_COUNT)
             return False
 
+coke = cv2.imread("coke.jpg")
 
+font = cv2.FONT_HERSHEY_SIMPLEX
 previous_crops = []
+current_bounding_boxes = {}
+n = 0
 while(cap.isOpened()):
     # time.sleep(.3)
+
+
+
     frame_start = time.time()
     ret, frame = cap.read()
+
+    # resize
+    # frame = cv2.resize(frame, None, fx=0.25, fy=0.25, interpolation=cv2.INTER_NEAREST)
+    cv2.circle(frame,(100,100), 64, (200,0,200), -1)
+    n+=1
+    if n>5 and n<10:
+        frame[400:400+coke.shape[0], 50:50+coke.shape[1]] = coke
+
+
+
+
     gray_image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     mask = create_mask(gray_image)
@@ -132,7 +154,7 @@ while(cap.isOpened()):
     # 17 for 0.5
     # 10 for 0.25
     start =  time.time()
-    db = DBSCAN(eps=10, min_samples=50, metric = 'euclidean',algorithm ='auto')
+    db = DBSCAN(eps=17, min_samples=50, metric = 'euclidean',algorithm ='auto')
     db.fit(feature_image)
     print time.time() - start
 
@@ -169,12 +191,45 @@ while(cap.isOpened()):
     except:
         pass
 
+    # If the current boxes are empty (first frame has started)
+    print "******************* ", current_bounding_boxes
+    if not current_bounding_boxes:
+        print "inside"
+        temp_boxes = bounding_boxes.copy()
+        for key in temp_boxes.keys():
+            current_bounding_boxes[new_name()] = temp_boxes.pop(key)
+        print "Got new bounding boxes", current_bounding_boxes
+    else:
+        # if
+        delete_keys = []
+        temp_current = {}
+        for cur_name in current_bounding_boxes.keys():
+            for bb_name in bounding_boxes.keys():
+                if current_bounding_boxes[cur_name].is_match(bounding_boxes[bb_name]):
+                    print cur_name, "matches"
+                    temp_current[cur_name] = bounding_boxes[bb_name]
+                    break
+        current_bounding_boxes = temp_current.copy()
+
+        print len(current_bounding_boxes), current_bounding_boxes.keys()
+        print len(bounding_boxes), bounding_boxes.keys()
+    # try:
+    print current_bounding_boxes
+    print "names"
+    for key in current_bounding_boxes.keys():
+        print key
+        cv2.putText(frame, key,(current_bounding_boxes[key].x,current_bounding_boxes[key].y), font, 1,(0,0,0),3 ,cv2.LINE_AA)
+    # need to add the third case
+
+
+
+
 
     ### remember to only show bounding boxes of a certain size. BIGGER means longer, perhaps without homography
-    start = time.time()
-    for name in bounding_boxes:
-        for previous_crop in previous_crops:
-            bounding_boxes[name].is_match(previous_crop)
+    # start = time.time()
+    # for name in bounding_boxes:
+    #     for previous_crop in previous_crops:
+    #         bounding_boxes[name].is_match(previous_crop)
 
 
     print "Time for match: >>>>>>>>>>>>", time.time() - start
@@ -186,6 +241,7 @@ while(cap.isOpened()):
     ### Display the frame
     if DEBUG:
         debug_show(frame, reshaped_img)
+
     else:
         cv2.imshow('frame',frame)
     if cv2.waitKey(2) & 0xFF == ord('q'):
