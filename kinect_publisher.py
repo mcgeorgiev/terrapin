@@ -60,6 +60,8 @@ def projection():
 
     color_pub = rospy.Publisher('color', Image, queue_size=10)
     depth_pub = rospy.Publisher('depth', Image, queue_size=10)
+    ir_pub = rospy.Publisher('ir', Image, queue_size=10)
+    small_depth_pub = rospy.Publisher('small_depth', Image, queue_size=10)
 
     rospy.init_node('projection', anonymous=True)
     rate = rospy.Rate(10) # 10hz
@@ -81,6 +83,12 @@ def projection():
 
         depth_image = CvBridge().cv2_to_imgmsg(bigdepth.asarray(np.float32))
         depth_pub.publish(depth_image)
+
+        ir_image = CvBridge().cv2_to_imgmsg(ir.asarray())
+        ir_pub.publish(ir_image)
+
+        small_depth_image = CvBridge().cv2_to_imgmsg(depth.asarray())
+        small_depth_pub.publish(small_depth_image)
 
         rate.sleep()
 
