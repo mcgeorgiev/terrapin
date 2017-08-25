@@ -15,9 +15,11 @@ class Distance:
         self.center = 0
         rospy.init_node('distance', anonymous=True)
         rospy.Subscriber('/kinect2/qhd/image_depth_rect', Image, self.callback)
+        rospy.Subscriber('/depth/depth_registered', Image, self.callback)
+
 
     def callback(self, data):
-        image = self.bridge.imgmsg_to_cv2(data, "16UC1")
+        image = self.bridge.imgmsg_to_cv2(data, "32FC1")
         self.depth_image =  np.copy(image)
         unique, counts = np.unique(self.depth_image, return_counts=True)
         h, w = self.depth_image.shape
