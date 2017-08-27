@@ -11,9 +11,17 @@ import numpy as np
 import tf2_geometry_msgs
 from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
-class Marker:
-    def __init__(self):
-        rospy.Subscriber('/camera/depth/points', PointCloud2, self.point_cloud_callback)
+import sys
+class Mark_Maker:
+    def __init__(self, camera):
+        rospy.init_node("marker")
+        if camera == "gazebo":
+            topic = '/camera/depth/points'
+        elif camera == "kinect2":
+            topic = '/kinect2/qhd/points'
+
+        rospy.Subscriber('/kinect2/qhd/points', PointCloud2, self.point_cloud_callback)
+        self.pc_frame_id = ""
         self.tf_buffer = tf2_ros.Buffer()
         self.tf2_listener = tf2_ros.TransformListener(self.tf_buffer)
         self.translation = None
@@ -31,7 +39,7 @@ class Marker:
 
     def to_msg_vector(self, vector):
         msg = PointStamped()
-        msg.header.frame_id = "camera_depth_optical_frame"
+        msg.header.frame_id = self.pc_frame_id
         msg.header.stamp = rospy.Time(0)
         msg.point.x = vector[0]
         msg.point.y = vector[1]
@@ -40,21 +48,21 @@ class Marker:
 
     def point_cloud_callback(self, msg):
         point_cloud = msg
-
-        # print "getting point data"
+        self.pc_frame_id = point_cloud.header.frame_id
         point_list = []
         for p in pc2.read_points(point_cloud, field_names = ("x", "y", "z")):
             point_list.append((p[0],p[1],p[2]))
         point_array = np.array(point_list)
-        self.point_3d_array = np.reshape(point_array, (480,640,3))
+        self.point_3d_array = np.reshape(point_array, (point_cloud.height,point_cloud.width,3))
 
         self.transform = self.tf_buffer.lookup_transform("map",
                                                         msg.header.frame_id,
                                                         rospy.Time(0),
                                                         rospy.Duration(10))
+
         self.translation = self.transform.transform.translation
         self.rotation = self.transform.transform.rotation
-
+        print "recieved point cloud data"
 
     def mark(self, x, y, z):
         marker = Marker()
@@ -108,17 +116,19 @@ class Marker:
         return res
 
     def listen(self):
-        while  not rospy.is_shutdown():
+        while not rospy.is_shutdown():
+
             try:
                 x,y,z = self.get_xyz(320,240)
                 vec = self.to_msg_vector(Vector(x,y,z))
                 if self.transform:
                     transformed_vec = self.do_transform_vector3(vec, self.transform)
                     x,y,z = transformed_vec.vector.x, transformed_vec.vector.y, transformed_vec.vector.z
+                    print x,y,z
                     self.mark(x,y,z)
                     print "published marker"
             except Exception as e:
-                pass
+                print('Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(e).__name__, e)
 
-m = Marker()
+m = Mark_Maker('kinect2')
 m.listen()

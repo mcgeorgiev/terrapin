@@ -25,18 +25,21 @@ class Distance:
         self.MARKERS_MAX = 1
 
         rospy.init_node('distance', anonymous=True)
-        rospy.Subscriber('camera/rgb/image_raw', Image, self.color_callback)
-        rospy.Subscriber('camera/depth/points', PointCloud2, self.point_cloud_callback)
+
+        rospy.Subscriber('/camera/depth/image_raw', Image, self.callback)
+        # rospy.Subscriber('/depth/depth_registered', Image, self.callback)
+        # rospy.Subscriber('camera/rgb/image_raw', Image, self.color_callback)
+        # rospy.Subscriber('camera/depth/points', PointCloud2, self.point_cloud_callback)
 
         self.publisher = rospy.Publisher('visualization_marker_array', MarkerArray, queue_size=10)
 
     #     rospy.Subscriber('/kinect2/qhd/image_depth_rect', Image, self.callback)
 
     def callback(self, data):
-        image = self.bridge.imgmsg_to_cv2(data, "16UC1")
+        image = self.bridge.imgmsg_to_cv2(data, "32FC1")
         self.depth_image =  np.copy(image)
         unique, counts = np.unique(self.depth_image, return_counts=True)
-        print unique,counts
+        # print unique,counts
         h, w = self.depth_image.shape
         self.center =  (w/2,h/2)
         # print self.depth_image[self.center[1], self.center[0]]
@@ -79,6 +82,7 @@ class Distance:
 
     def mark(self, x, y, z):
        marker = Marker()
+       print marker
        marker.header.frame_id = "/base_link"
        marker.type = marker.SPHERE
        marker.action = marker.ADD
@@ -119,14 +123,14 @@ class Distance:
             # frame = np.copy(self.depth_image * 255)
             # cv2.circle(frame, self.center, 4, 100000, -1)
             frame = self.point_3d_array# np.copy(self.color)
-            cv2.circle(frame, self.center, 4, (255,255,255), -1)
-            cv2.circle(frame, (520,120), 4, (255,0,0), -1)
-            cv2.imshow("Frame", frame)
-            x, y, z = self.get_xyz(420,120)
-            print "Blue:",x,y,z
-            x, y, z = self.get_xyz(self.center[0],self.center[1])
-            print "White",x,y,z
-            # self.mark(x,y,z)
+            # cv2.circle(frame, self.center, 4, (255,255,255), -1)
+            # cv2.circle(frame, (520,120), 4, (255,0,0), -1)
+            # cv2.imshow("Frame", frame)
+            # x, y, z = self.get_xyz(420,120)
+            # print "Blue:",x,y,z
+            # x, y, z = self.get_xyz(self.center[0],self.center[1])
+            # print "White",x,y,z
+            self.mark(1,1,1)
             key = cv2.waitKey(delay=1)
             if key == ord('q'):
                 break
