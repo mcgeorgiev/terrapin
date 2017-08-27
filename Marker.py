@@ -14,13 +14,12 @@ from visualization_msgs.msg import MarkerArray
 import sys
 class Mark_Maker:
     def __init__(self, camera):
-        rospy.init_node("marker")
         if camera == "gazebo":
             topic = '/camera/depth/points'
         elif camera == "kinect2":
             topic = '/kinect2/qhd/points'
 
-        rospy.Subscriber('/kinect2/qhd/points', PointCloud2, self.point_cloud_callback)
+        rospy.Subscriber(topic, PointCloud2, self.point_cloud_callback)
         self.pc_frame_id = ""
         self.tf_buffer = tf2_ros.Buffer()
         self.tf2_listener = tf2_ros.TransformListener(self.tf_buffer)
@@ -31,10 +30,10 @@ class Mark_Maker:
         self.count = 0
         self.MARKERS_MAX = 1
         self.point_3d_array = None
+        self.radius = 0.8 # radius of the sphere used to localised objects from the center
         self.publisher = rospy.Publisher('visualization_marker_array', MarkerArray, queue_size=10)
 
     def get_xyz(self, x, y):
-        # print self.point_3d_array
         return self.point_3d_array[y][x]
 
     def to_msg_vector(self, vector):
@@ -80,6 +79,8 @@ class Mark_Maker:
         marker.pose.position.x = x
         marker.pose.position.y = y
         marker.pose.position.z = z
+        marker.id = self.count
+        marker.ns = "Name"
 
         # We add the new marker to the MarkerArray, removing the oldest
         # marker from it when necessary
@@ -88,11 +89,11 @@ class Mark_Maker:
 
         self.markerArray.markers.append(marker)
 
-        # Renumber the marker IDs
-        id = 0
-        for m in self.markerArray.markers:
-            m.id = id
-            id += 1
+        # # Renumber the marker IDs
+        # id = 0
+        # for m in self.markerArray.markers:
+        #     m.id = id
+        #     id += 1
 
         # Publish the MarkerArray
         self.publisher.publish(self.markerArray)
@@ -115,20 +116,63 @@ class Mark_Maker:
         res.header = transform.header
         return res
 
+    def add_marker(self, _x, _y):
+        x,y,z = self.get_xyz(_x,_y)
+        vec = self.to_msg_vector(Vector(x,y,z))
+        if self.transform:
+            transformed_vec = self.do_transform_vector3(vec, self.transform)
+            dx,dy,dz = transformed_vec.vector.x, transformed_vec.vector.y, transformed_vec.vector.z
+            existing_marker = self.inside_spheres(dx,dy,dz)
+            if not self.inside_spheres(dx,dy,dz):
+                self.mark(dx,dy,dz)
+                print "published marker at", _y, _x
+                return False
+            else:
+                return existing_marker
+                # self.xyz_to_uv(dx, dy, dz)
+
+
+    def isclose(self, a, b, rel_tol=1e-09, abs_tol=0.0):
+        return abs(a-b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
+
+    def xyz_to_uv(self, x,y,z):
+        vec = self.to_msg_vector(Vector(x,y,z))
+        transform = self.tf_buffer.lookup_transform("camera_depth_optical_frame","map",rospy.Time(0),rospy.Duration(10))
+        transformed_vec = self.do_transform_vector3(vec, transform)
+        dx,dy,dz = transformed_vec.vector.x, transformed_vec.vector.y, transformed_vec.vector.z
+        point_index = np.where(np.isclose(self.point_3d_array, [dx,dy,dz], 0.000001))
+        print x, y, z, "is ", str(point_index)
+        try:
+            y_count = np.bincount(point_index[0])
+            x_count = np.bincount(point_index[1])
+            return np.argmax(y_count), np.argmax(x_count)
+        except:
+            return -1,-1
+
+    def inside_spheres(self, x, y, z):
+        for marker in self.markerArray.markers:
+            cx = marker.pose.position.x
+            cy = marker.pose.position.y
+            cz = marker.pose.position.z
+            if ((x - cx)**2 + (y - cy)**2 + (z - cz)**2) < (self.radius**2):
+                return marker
+        return False
+
     def listen(self):
         while not rospy.is_shutdown():
+            print "existing"
+            # try:
+            #     x,y,z = self.get_xyz(320,240)
+            #     vec = self.to_msg_vector(Vector(x,y,z))
+            #     if self.transform:
+            #         transformed_vec = self.do_transform_vector3(vec, self.transform)
+            #         x,y,z = transformed_vec.vector.x, transformed_vec.vector.y, transformed_vec.vector.z
+            #         print x,y,z
+            #         self.mark(x,y,z)
+            #         print "published marker"
+            # except Exception as e:
+            #     print('Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(e).__name__, e)
 
-            try:
-                x,y,z = self.get_xyz(320,240)
-                vec = self.to_msg_vector(Vector(x,y,z))
-                if self.transform:
-                    transformed_vec = self.do_transform_vector3(vec, self.transform)
-                    x,y,z = transformed_vec.vector.x, transformed_vec.vector.y, transformed_vec.vector.z
-                    print x,y,z
-                    self.mark(x,y,z)
-                    print "published marker"
-            except Exception as e:
-                print('Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(e).__name__, e)
-
-m = Mark_Maker('kinect2')
-m.listen()
+if __name__ == "__main__":
+    m = Mark_Maker('gazebo')
+    m.listen()
