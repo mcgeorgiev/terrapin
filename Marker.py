@@ -66,7 +66,7 @@ class Mark_Maker:
     def mark(self, x, y, z):
         marker = Marker()
         marker.header.frame_id = "/map"
-        marker.type = marker.SPHERE
+        marker.type = marker.TEXT_VIEW_FACING
         marker.action = marker.ADD
         marker.scale.x = 0.2
         marker.scale.y = 0.2
@@ -80,7 +80,8 @@ class Mark_Maker:
         marker.pose.position.y = y
         marker.pose.position.z = z
         marker.id = self.count
-        marker.ns = "Name"
+        marker.ns = "-"
+        
 
         # We add the new marker to the MarkerArray, removing the oldest
         # marker from it when necessary

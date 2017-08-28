@@ -12,7 +12,7 @@ import names
 import matplotlib.pyplot as plt
 from Marker import Mark_Maker
 from google_query import GoogleVision
-
+from tensor_flow.tf_files.label_image import TensorFlow
 
 class Box:
     def __init__(self, x, y, w, h, scale):
@@ -67,6 +67,7 @@ class Camera:
         self.marker_object = Mark_Maker("gazebo")
         self.frame = None
         self.google_vision = GoogleVision()
+        self.tensorflow = TensorFlow()
 
 
     def callback(self, data):
@@ -157,21 +158,22 @@ class Camera:
                 # show the box
                 existing_marker = self.marker_object.add_marker(bounding_boxes[key].center_x,bounding_boxes[key].center_y)
                 if not existing_marker:
-                    label, score = self.google_vision.query(bounding_boxes[key].roi)
+                    label, score = self.tensorflow.query(bounding_boxes[key].roi)
+                    time = 0
+                    if score < 0.5:
+                        label, score = self.google_vision.query(bounding_boxes[key].roi)
+                        time = 15
+                        if score < 0.8: # if the google vision api gives a bad reading
+                            continue
                     # cv2.imwrite("crop.png", bounding_boxes[key].roi)
                     self.marker_object.markerArray.markers[-1].ns = label
+                    self.marker_object.markerArray.markers[-1].text = label
                 else:
                     label = existing_marker.ns
 
-                ########
-                # Need to add timers to the markers here, depending on somethings, possibly depending on tensor flow
-                # Run tensorflow first, if it exists then add a permenant timer,
-                # if it doesn't then query google and then add an impermenant timer
-                ########
-
                 # show the box
-                cv2.putText(self.frame, str(label),(bounding_boxes[key].y,bounding_boxes[key].x+50), self.font, 1,(0,0,0),3 ,cv2.LINE_AA)
-                cv2.rectangle(self.frame,(bounding_boxes[key].y,bounding_boxes[key].x),(bounding_boxes[key].y+bounding_boxes[key].h, bounding_boxes[key].x+bounding_boxes[key].w),(0,0,0),1)
+                cv2.putText(self.frame, str(label),(bounding_boxes[key].y,bounding_boxes[key].x+50), self.font, 1,(0,255,0),3 ,cv2.LINE_AA)
+                cv2.rectangle(self.frame,(bounding_boxes[key].y,bounding_boxes[key].x),(bounding_boxes[key].y+bounding_boxes[key].h, bounding_boxes[key].x+bounding_boxes[key].w),(0,255,0),4)
 
 
 
@@ -236,8 +238,8 @@ class Camera:
             self.frame = self.color_image
             # self.marker_object.add_marker(320, 240)
             # # frame = cv2.resize(self.color_image, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_NEAREST)
-            self.segment()
-            self.box()
+            # self.segment()
+            # self.box()
             # x = 200
             # y = 200
             print "markers------------------"
@@ -245,20 +247,20 @@ class Camera:
                 print i, self.marker_object.markerArray.markers[i].ns
 
             cv2.imshow("Frame", self.frame)
-            plt.figure(4)
-            plt.subplot(4, 1, 1)
-            plt.imshow(self.mask)
-            plt.axis('off')
-            plt.subplot(4, 1, 2)
-            plt.imshow(self.depth_image)
-            plt.axis('off')
-            plt.subplot(4, 1, 3)
-            plt.imshow(self.reshaped_img)
-            plt.axis('off')
-            plt.subplot(4, 1, 4)
-            plt.imshow(self.color_image)
-            plt.axis('off')
-            plt.show()
+            # plt.figure(4)
+            # plt.subplot(4, 1, 1)
+            # plt.imshow(self.mask)
+            # plt.axis('off')
+            # plt.subplot(4, 1, 2)
+            # plt.imshow(self.depth_image)
+            # plt.axis('off')
+            # plt.subplot(4, 1, 3)
+            # plt.imshow(self.reshaped_img)
+            # plt.axis('off')
+            # plt.subplot(4, 1, 4)
+            # plt.imshow(self.color_image)
+            # plt.axis('off')
+            # plt.show()
             key = cv2.waitKey(delay=1)
             if key == ord('q'):
                 break
