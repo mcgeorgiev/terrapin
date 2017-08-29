@@ -82,7 +82,6 @@ class Distance:
 
     def mark(self, x, y, z):
        marker = Marker()
-       print marker
        marker.header.frame_id = "/base_link"
        marker.type = marker.SPHERE
        marker.action = marker.ADD
