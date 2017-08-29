@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from Marker import Mark_Maker
 from google_query import GoogleVision
 from tensor_flow.tf_files.label_image import TensorFlow
+from sklearn.preprocessing import StandardScaler
 
 class Box:
     def __init__(self, x, y, w, h, scale):
@@ -222,6 +223,17 @@ class Camera:
         mask[mask > 0] = 255
         self.mask = mask
 
+        # X, x_size, y_size = self.create_features(self.mask, self.gray_image)
+        # if X.shape[0] > 100:
+        #     X_prime = np.copy(X)
+        #     X_prime = StandardScaler().fit_transform(X_prime)
+        #     db = DBSCAN(eps=0.3, min_samples=10).fit(X_prime)
+        #     n_clusters = len(set(db.labels_)) - (1 if -1 in db.labels_ else 0)
+        #     labels = db.labels_
+        #     unique_labels = set(labels)
+        #     cluster_image = np.asarray(self.mask, dtype=np.uint8) * 255
+        #     self.cluster_image = np.repeat(cluster_image, 3, axis=1).reshape(self.mask.shape + (3, ))
+        #
 
 
         labimg = cv2.resize(self.depth_image, None, fx=self.dbscan_scale, fy=self.dbscan_scale, interpolation=cv2.INTER_NEAREST)
@@ -245,6 +257,29 @@ class Camera:
         # for color in unique:
         # self.reshaped_img[self.reshaped_img == -1] = (255,0,0)
         # print unique
+
+    def create_features(self, mask, gray_image):
+        x_size, y_size = mask.shape[0], mask.shape[1]
+        gX, gY = np.meshgrid(range(mask.shape[0]), range(mask.shape[1]))
+
+        X = np.zeros((mask.size, 5))
+        X[:, 0] = gX.transpose().ravel() * 1.0 / x_size
+        X[:, 1] = gY.transpose().ravel() * 1.0 / y_size
+        X[:, 2] = mask.ravel()
+        X[:, 3] = self.depth_img.ravel() * 1.0 / self.current_depth_thresh
+        X[:, 4] = gray_image.ravel() * 1.0 / gray_image.max()
+
+        X = X[X[:, 2] == 1]
+        num_samples = X.shape[0]
+        step_size = int(num_samples / 3000)
+
+        if step_size == 0:
+            step_size = 1
+
+        X = X[0::step_size, :]
+
+        return X, x_size, y_size
+
 
     def listen(self):
         while not rospy.is_shutdown():
