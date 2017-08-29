@@ -5,6 +5,7 @@ import cv2
 import time
 from cv_bridge import CvBridge
 import numpy as np
+from numpy import inf
 from skimage.filters import threshold_otsu
 from skimage import morphology
 from sklearn.cluster import DBSCAN
@@ -31,6 +32,9 @@ class Box:
     def crop(self, frame):
         self.roi = frame[self.x:self.x+self.w, self.y:self.y+self.h]
 
+    def to_big(self, full_image):
+        if self.h > (full_image.shape[0]/1.5) or self.w > (full_image.shape[1]/1.5):
+            return True
 
 class Camera:
     def __init__(self, sensor):
@@ -50,6 +54,9 @@ class Camera:
         elif self.sensor == "gazebo":
             color_topic = "/camera/rgb/image_raw"
             depth_topic = "/camera/depth/image_raw"
+        elif self.sensor == "zed":
+            color_topic = "/rgb/image_rect_color"
+            depth_topic = "/depth/depth_registered"
 
         rospy.Subscriber(color_topic, Image, self.callback)
         rospy.Subscriber(depth_topic, Image, self.depth_callback)
@@ -59,12 +66,12 @@ class Camera:
         self.current_depth_threshold = 0
         self.dbscan_scale = 0.15
         # 1500
-        self.depth_max_threshold = 1200
+        self.depth_max_threshold = 2000
         self.mask = None
         self.labels = None
         self.font = cv2.FONT_HERSHEY_SIMPLEX
 
-        self.marker_object = Mark_Maker("gazebo")
+        # self.marker_object = Mark_Maker(self.sensor)
         self.frame = None
         self.google_vision = GoogleVision()
         self.tensorflow = TensorFlow()
@@ -73,7 +80,7 @@ class Camera:
     def callback(self, data):
         if self.sensor == "hack_kinect2":
             image = self.bridge.imgmsg_to_cv2(data, "16UC1")
-        elif self.sensor == "kinect2" or self.sensor == "gazebo":
+        elif self.sensor == "kinect2" or self.sensor == "gazebo" or self.sensor == "zed":
             image = self.bridge.imgmsg_to_cv2(data, "bgr8")
 
         self.color_image = np.copy(image)
@@ -83,13 +90,17 @@ class Camera:
     def depth_callback(self, data):
         if self.sensor == "hack_kinect2":
             image = self.bridge.imgmsg_to_cv2(data, "8UC1")
-        elif self.sensor == "kinect2" or self.sensor == "gazebo":
+        elif self.sensor == "kinect2" or self.sensor == "gazebo" or self.sensor == "zed":
             image = self.bridge.imgmsg_to_cv2(data, "32FC1")
         depth_image = np.copy(image)
-        if self.sensor == "gazebo":
+        if self.sensor == "gazebo" or self.sensor == "zed":
             where_are_NaNs = np.isnan(depth_image)
             depth_image[where_are_NaNs] = 0
-        # # depth_image = depth_image[:depth_image.shape[0]-2] # shave off
+        if self.sensor == "zed":
+            depth_image *= 1000 #zed cam is in meters while processing happens in mm
+            depth_image[depth_image == -inf] = 0
+            depth_image[depth_image >= 1E308] = 0
+        # # # depth_image = depth_image[:depth_image.shape[0]-2] # shave off
         depth_threshold = threshold_otsu(depth_image)
         if depth_threshold > self.depth_max_threshold:
             depth_threshold = self.depth_max_threshold
@@ -100,7 +111,7 @@ class Camera:
         self.depth_image = depth_image
         unique, counts = np.unique(self.depth_image, return_counts=True)
         # print unique
-        # self.current_depth_thresh = depth_threshold
+        self.current_depth_thresh = depth_threshold
 
     def new_name(self):
         return str(names.get_full_name())
@@ -155,24 +166,30 @@ class Camera:
                 bounding_boxes[key] = Box(x, y, w, h, self.dbscan_scale)
                 bounding_boxes[key].crop(self.color_image)
 
+                # if bounding_boxes[key].to_big(self.color_image):
+                #     print key, "too big"
+                #     continue
+
+                if key in [-1]:
+                    continue
                 # show the box
-                existing_marker = self.marker_object.add_marker(bounding_boxes[key].center_x,bounding_boxes[key].center_y)
-                if not existing_marker:
-                    label, score = self.tensorflow.query(bounding_boxes[key].roi)
-                    time = 0
-                    if score < 0.5:
-                        label, score = self.google_vision.query(bounding_boxes[key].roi)
-                        time = 15
-                        if score < 0.8: # if the google vision api gives a bad reading
-                            continue
-                    # cv2.imwrite("crop.png", bounding_boxes[key].roi)
-                    self.marker_object.markerArray.markers[-1].ns = label
-                    self.marker_object.markerArray.markers[-1].text = label
-                else:
-                    label = existing_marker.ns
+                # existing_marker = self.marker_object.add_marker(bounding_boxes[key].center_x,bounding_boxes[key].center_y)
+                # if not existing_marker:
+                #     label, score = self.tensorflow.query(bounding_boxes[key].roi)
+                #     time = 0
+                #     if score < 0.5:
+                #         label, score = self.google_vision.query(bounding_boxes[key].roi)
+                #         time = 15
+                #         if score < 0.8: # if the google vision api gives a bad reading
+                #             continue
+                #     # cv2.imwrite("crop.png", bounding_boxes[key].roi)
+                #     self.marker_object.markerArray.markers[-1].ns = label
+                #     self.marker_object.markerArray.markers[-1].text = label
+                # else:
+                #     label = existing_marker.ns
 
                 # show the box
-                cv2.putText(self.frame, str(label),(bounding_boxes[key].y,bounding_boxes[key].x+50), self.font, 1,(0,255,0),3 ,cv2.LINE_AA)
+                cv2.putText(self.frame, str(key),(bounding_boxes[key].y,bounding_boxes[key].x+50), self.font, 1,(0,255,0),3 ,cv2.LINE_AA)
                 cv2.rectangle(self.frame,(bounding_boxes[key].y,bounding_boxes[key].x),(bounding_boxes[key].y+bounding_boxes[key].h, bounding_boxes[key].x+bounding_boxes[key].w),(0,255,0),4)
 
 
@@ -186,13 +203,14 @@ class Camera:
 
         if self.sensor == "hack_kinect2":
             self.gray_image = self.color_image
-        elif self.sensor == "kinect2" or self.sensor == "gazebo":
+        elif self.sensor == "kinect2" or self.sensor == "gazebo" or self.sensor == "zed":
             self.gray_image = cv2.cvtColor(self.color_image, cv2.COLOR_BGR2GRAY)
 
 
         mask1 = self.gray_image < threshold_otsu(self.gray_image)
         mask2 = self.gray_image > threshold_otsu(self.gray_image)
         mask = mask1 if np.sum(mask1) < np.sum(mask2) else mask2
+
         # mask = morphology.remove_small_objects(mask, 50)
         # if self.sensor == "kinect2":
         #     # using this line always screws things up
@@ -203,7 +221,8 @@ class Camera:
 
         mask[mask > 0] = 255
         self.mask = mask
-        # self.mask[self.mask > 0] = 255
+
+
 
         labimg = cv2.resize(self.depth_image, None, fx=self.dbscan_scale, fy=self.dbscan_scale, interpolation=cv2.INTER_NEAREST)
         labimg = cv2.cvtColor(labimg, cv2.COLOR_GRAY2BGR)
@@ -215,7 +234,8 @@ class Camera:
 
         start =  time.time()
         # 10 and 50
-        db = DBSCAN(eps=5, min_samples=30, metric = 'euclidean',algorithm ='auto')
+        # 5 and 30
+        db = DBSCAN(eps=5, min_samples=50, metric = 'euclidean',algorithm ='auto')
         db.fit(feature_image)
         rospy.loginfo("Time for DBSCAN:" + str(time.time() - start))
 
@@ -232,20 +252,22 @@ class Camera:
             #
             # ok, bbox = self.tracker.update(self.color_image)
             # time.sleep(0.25)
-            # self.segment()
-
-            # create frame so it can be manipulated
+            # self.frame = self.mask
+            self.segment()
             self.frame = self.color_image
+            self.box()
+            # create frame so it can be manipulated
+            # self.frame = self.color_image
             # self.marker_object.add_marker(320, 240)
             # # frame = cv2.resize(self.color_image, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_NEAREST)
-            # self.segment()
             # self.box()
             # x = 200
             # y = 200
-            print "markers------------------"
-            for i in range(0, len(self.marker_object.markerArray.markers)):
-                print i, self.marker_object.markerArray.markers[i].ns
+            # print "markers------------------"
+            # for i in range(0, len(self.marker_object.markerArray.markers)):
+            #     print i, self.marker_object.markerArray.markers[i].ns
 
+            # cv2.imshow("Frame", self.frame)
             cv2.imshow("Frame", self.frame)
             # plt.figure(4)
             # plt.subplot(4, 1, 1)
@@ -267,7 +289,7 @@ class Camera:
 
 
 if __name__ == '__main__':
-    c = Camera('gazebo')
+    c = Camera('zed')
     time.sleep(5)
     c.listen()
     cv2.destroyAllWindows()
