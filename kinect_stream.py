@@ -25,6 +25,7 @@ class Box:
         self.center_x = self.center_y = None
         self.get_center()
         self.roi = None
+        self.corners = 0
 
     def get_center(self):
         self.center_x = (self.x + self.x + self.w)/2
@@ -32,10 +33,17 @@ class Box:
 
     def crop(self, frame):
         self.roi = frame[self.x:self.x+self.w, self.y:self.y+self.h]
+        self.fast()
 
     def to_big(self, full_image):
         if self.h > (full_image.shape[0]/1.5) or self.w > (full_image.shape[1]/1.5):
             return True
+
+    def fast(self):
+        # Initiate FAST object with default values
+        fast = cv2.FastFeatureDetector_create()
+        kp = fast.detect(self.roi,None)
+        self.corners = len(kp)
 
 class Camera:
     def __init__(self, sensor):
@@ -170,6 +178,8 @@ class Camera:
                 # if bounding_boxes[key].to_big(self.color_image):
                 #     print key, "too big"
                 #     continue
+                if bounding_boxes[key].corners < 500:
+                    continue
 
                 if key in [-1]:
                     continue
