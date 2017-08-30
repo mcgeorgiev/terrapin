@@ -18,7 +18,9 @@ class Mark_Maker:
             topic = '/camera/depth/points'
         elif camera == "kinect2":
             topic = '/kinect2/qhd/points'
-
+        elif camera == "zed":
+            topic = "/point_cloud/cloud_registered"
+        self.camera = camera
         rospy.Subscriber(topic, PointCloud2, self.point_cloud_callback)
         self.pc_frame_id = ""
         self.tf_buffer = tf2_ros.Buffer()
@@ -48,14 +50,15 @@ class Mark_Maker:
     def point_cloud_callback(self, msg):
         point_cloud = msg
         self.pc_frame_id = point_cloud.header.frame_id
+        if self.pc_frame_id[0] == "/":
+            self.pc_frame_id = self.pc_frame_id[1:]
         point_list = []
         for p in pc2.read_points(point_cloud, field_names = ("x", "y", "z")):
             point_list.append((p[0],p[1],p[2]))
         point_array = np.array(point_list)
         self.point_3d_array = np.reshape(point_array, (point_cloud.height,point_cloud.width,3))
-
         self.transform = self.tf_buffer.lookup_transform("map",
-                                                        msg.header.frame_id,
+                                                        self.pc_frame_id,
                                                         rospy.Time(0),
                                                         rospy.Duration(10))
 
@@ -66,7 +69,7 @@ class Mark_Maker:
     def mark(self, x, y, z):
         marker = Marker()
         marker.header.frame_id = "/map"
-        marker.type = marker.TEXT_VIEW_FACING
+        marker.type = marker.SPHERE
         marker.action = marker.ADD
         marker.scale.x = 0.2
         marker.scale.y = 0.2
@@ -81,7 +84,7 @@ class Mark_Maker:
         marker.pose.position.z = z
         marker.id = self.count
         marker.ns = "-"
-        
+
 
         # We add the new marker to the MarkerArray, removing the oldest
         # marker from it when necessary
@@ -118,6 +121,13 @@ class Mark_Maker:
         return res
 
     def add_marker(self, _x, _y):
+        if self.camera == "zed":
+            tmp = _x
+            _x = _y
+            _y = tmp
+        print _y, _x
+        print self.point_3d_array.shape
+
         x,y,z = self.get_xyz(_x,_y)
         vec = self.to_msg_vector(Vector(x,y,z))
         if self.transform:
