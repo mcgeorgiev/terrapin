@@ -117,50 +117,10 @@ class Camera:
         depth_threshold = threshold_otsu(depth_image)
         if depth_threshold > self.depth_max_threshold:
             depth_threshold = self.depth_max_threshold
-        #print depth_threshold
         depth_image[depth_image > depth_threshold] = 0
         depth_image[depth_image > 0] = 255
-        # self.depth_mask = np.squeeze(depth_image < depth_threshold)
         self.depth_image = depth_image
-        unique, counts = np.unique(self.depth_image, return_counts=True)
-        # print unique
         self.current_depth_thresh = depth_threshold
-
-    def new_name(self):
-        return str(names.get_full_name())
-
-    # def show_boxes(self):
-    #     # gets all points from the cluster
-    #     all_points = {}
-    #     unique, counts = np.unique(self.labels, return_counts=True)
-    #     for label in unique:
-    #         x, y =  np.where(self.reshaped_img == label)
-    #         points =  np.column_stack((x, y))
-    #         all_points[label] = points
-    #         # x,y,w,h = cv2.boundingRect(points)
-    #         # cv2.rectangle(labimg,(y,x),(y+h, x+w),100,1)
-    #
-    #     bounding_boxes = {}
-    #     for key, value in all_points.items():
-    #         x,y,w,h = cv2.boundingRect(value)
-    #         x *= int(1/self.dbscan_scale)
-    #         y *= int(1/self.dbscan_scale)
-    #         w *= int(1/self.dbscan_scale)
-    #         h *= int(1/self.dbscan_scale)
-    #         # bounding_boxes[key] = Box(x, y, w, h)
-    #         # bounding_boxes[key].update(self.color_image)
-    #         cv2.putText(self.color_image, str(key),(y,x+50), self.font, 1,(0,0,0),3 ,cv2.LINE_AA)
-    #         cv2.rectangle(self.color_image,(y,x),(y+h, x+w),(0,0,0),1)
-    #     # reform the size of the bounding box
-    #     bounding_boxes = {}
-    #     for key, value in all_points.items():
-    #         x,y,w,h = cv2.boundingRect(value)
-    #         bounding_boxes[key] = Box(x, y, w, h, self.dbscan_scale)
-    #
-    #         # show the box
-    #         cv2.putText(self.color_image, str(key),(bounding_boxes[key].y,bounding_boxes[key].x+50), self.font, 1,(0,0,0),3 ,cv2.LINE_AA)
-    #         cv2.rectangle(self.color_image,(bounding_boxes[key].y,bounding_boxes[key].x),(bounding_boxes[key].y+bounding_boxes[key].h, bounding_boxes[key].x+bounding_boxes[key].w),(0,0,0),1)
-
 
 
     def box(self):
@@ -174,39 +134,45 @@ class Camera:
         # reform the size of the bounding box
         bounding_boxes = {}
         for key, value in all_points.items():
+            print len(value)
             x,y,w,h = cv2.boundingRect(value)
-            if len(value) > 1500:
+            if len(value) > 300 and len(value) < 5000:
                 bounding_boxes[key] = Box(x, y, w, h, self.dbscan_scale)
                 bounding_boxes[key].crop(self.color_image)
 
-                if bounding_boxes[key].to_big(self.color_image):
-                    print key, "too big"
-                    continue
-                # if bounding_boxes[key].corners < 500:
+
+                # if bounding_boxes[key].to_big(self.color_image):
+                #     print key, "too big"
+                #     continue
+                # if bounding_boxes[key].corners < 200:
                 #     continue
 
                 if key in [-1]:
                     continue
 
                 # show the box
-                existing_marker = self.marker_object.add_marker(bounding_boxes[key].center_x,bounding_boxes[key].center_y)
-                if not existing_marker:
-                    label, score = self.tensorflow.query(bounding_boxes[key].roi)
-                    time = 0
-                    if score < 0.5:
-                        label, score = self.google_vision.query(bounding_boxes[key].roi)
-                        time = 15
-                        if score < 0.8: # if the google vision api gives a bad reading
-                            continue
-                    # cv2.imwrite("crop.png", bounding_boxes[key].roi)
-                    self.marker_object.markerArray.markers[-1].ns = label
-                    self.marker_object.markerArray.markers[-1].text = label
-                else:
-                    label = existing_marker.ns
-
-                # show the box
-                cv2.putText(self.frame, str(label),(bounding_boxes[key].y,bounding_boxes[key].x+50), self.font, 1,(0,255,0),3 ,cv2.LINE_AA)
+                # existing_marker = self.marker_object.add_marker(bounding_boxes[key].center_x,bounding_boxes[key].center_y)
+                # if not existing_marker:
+                #     label, score = self.tensorflow.query(bounding_boxes[key].roi)
+                #     time = 0
+                #     if score < 0.5:
+                #         label, score = self.google_vision.query(bounding_boxes[key].roi)
+                #         time = 15
+                #         if score < 0.8: # if the google vision api gives a bad reading
+                #             continue
+                #     # cv2.imwrite("crop.png", bounding_boxes[key].roi)
+                #     self.marker_object.markerArray.markers[-1].ns = label
+                #     self.marker_object.markerArray.markers[-1].text = label
+                # else:
+                #     label = existing_marker.ns
+                #
+                # # show the box
+                # cv2.putText(self.frame, str(label),(bounding_boxes[key].y,bounding_boxes[key].x+50), self.font, 1,(0,255,0),3 ,cv2.LINE_AA)
                 cv2.rectangle(self.frame,(bounding_boxes[key].y,bounding_boxes[key].x),(bounding_boxes[key].y+bounding_boxes[key].h, bounding_boxes[key].x+bounding_boxes[key].w),(0,255,0),4)
+                mean = value.mean(axis=0)
+                mean = tuple([int(mean[1]), int(mean[0])])
+                cv2.circle(self.frame, (bounding_boxes[key].center_y, bounding_boxes[key].center_x), 10, (0,255,255), -1)
+
 
     def rand_color(self):
         return int(np.random.random() * 255)
@@ -236,11 +202,8 @@ class Camera:
         mask1 = self.gray_image < threshold_otsu(self.gray_image)
         mask2 = self.gray_image > threshold_otsu(self.gray_image)
         mask = mask1 if np.sum(mask1) < np.sum(mask2) else mask2
+        # mask = mask2 # not the floor
 
-        # mask = morphology.remove_small_objects(mask, 50)
-        # if self.sensor == "kinect2":
-        #     # using this line always screws things up
-        #     mask = morphology.remove_small_objects(mask * self.depth_mask, 50)
         mask = mask * self.depth_image
         mask = np.asarray(mask, dtype=np.uint8)
         mask = morphology.remove_small_objects(mask, 50)
@@ -252,90 +215,102 @@ class Camera:
         hsv_mask = cv2.inRange(blurred_hsv, self.average_color*0.1, self.average_color*1.9)
         self.mask = self.mask - hsv_mask
 
+        X, x_size, y_size = self.create_features(self.mask, self.gray_image)
+
+        boxes = []
+        if X.shape[0] > 100:
+            X_prime = np.copy(X)
+            X_prime = StandardScaler().fit_transform(X_prime)
+            db = DBSCAN(eps=0.7, min_samples=20).fit(X_prime)
+            n_clusters = len(set(db.labels_)) - (1 if -1 in db.labels_ else 0)
+            labels = db.labels_
+            unique_labels = set(labels)
+            cluster_image = np.asarray(self.mask, dtype=np.uint8) * 255
+            self.cluster_image = np.repeat(cluster_image, 3, axis=1).reshape(self.mask.shape + (3, ))
+            for k in unique_labels:
+
+                # this is the sklean label for noise
+                if k == -1:
+                    continue
+
+                class_member_mask = (labels == k)
+
+                class_feats = X[class_member_mask, :]
+                # probably a noisey cluster detection
+                if class_feats.shape[0] < 20:
+                    continue
 
 
+                self.gmm.fit(class_feats)
+                covars = np.sqrt(np.asarray(self.gmm._get_covars()))
+                alpha = 1
+                x1 = int((self.gmm.means_[0, 0] - alpha * covars[0, 0, 0]) * x_size)
+                x2 = int((self.gmm.means_[0, 0] + alpha * covars[0, 0, 0]) * x_size)
+                y1 = int((self.gmm.means_[0, 1] - alpha * covars[0, 1, 1]) * y_size)
+                y2 = int((self.gmm.means_[0, 1] + alpha * covars[0, 1, 1]) * y_size)
 
-        # X, x_size, y_size = self.create_features(self.mask, self.gray_image)
-        #
-        # boxes = []
-        # if X.shape[0] > 100:
-        #     X_prime = np.copy(X)
-        #     X_prime = StandardScaler().fit_transform(X_prime)
-        #     db = DBSCAN(eps=0.7, min_samples=20).fit(X_prime)
-        #     n_clusters = len(set(db.labels_)) - (1 if -1 in db.labels_ else 0)
-        #     labels = db.labels_
-        #     unique_labels = set(labels)
-        #     cluster_image = np.asarray(self.mask, dtype=np.uint8) * 255
-        #     self.cluster_image = np.repeat(cluster_image, 3, axis=1).reshape(self.mask.shape + (3, ))
-        #
-        #     for k in unique_labels:
-        #
-        #         # this is the sklean label for noise
-        #         if k == -1:
-        #             continue
-        #
-        #         class_member_mask = (labels == k)
-        #
-        #         class_feats = X[class_member_mask, :]
-        #
-        #         # probably a noisey cluster detection
-        #         if class_feats.shape[0] < 20:
-        #             continue
-        #
-        #
-        #         self.gmm.fit(class_feats)
-        #         covars = np.sqrt(np.asarray(self.gmm._get_covars()))
-        #         alpha = 2.2
-        #         x1 = int((self.gmm.means_[0, 0] - alpha * covars[0, 0, 0]) * x_size)
-        #         x2 = int((self.gmm.means_[0, 0] + alpha * covars[0, 0, 0]) * x_size)
-        #         y1 = int((self.gmm.means_[0, 1] - alpha * covars[0, 1, 1]) * y_size)
-        #         y2 = int((self.gmm.means_[0, 1] + alpha * covars[0, 1, 1]) * y_size)
-        #         # d1 = int((self.gmm.means_[0, 3] - alpha * covars[0, 3, 3]) * self.current_depth_thresh)
-        #         # d2 = int((self.gmm.means_[0, 3] + alpha * covars[0, 3, 3]) * self.current_depth_thresh)
-        #
-        #         mean_depth = self.gmm.means_[0, 3] * self.current_depth_thresh
-        #         boxes.append([x1, y1, x2, y2, mean_depth])
-        #
-        #         exp=5
-        #         rc = self.rand_color()
-        #         rc2 = self.rand_color()
-        #         rc3 = self.rand_color()
-        #         # c = self.gmm.means_[0, 3] * 255
-        #         for i in range(class_feats.shape[0]):
-        #             x, y = int(class_feats[i,0]*x_size), int(class_feats[i,1]*y_size)
-        #             self.cluster_image[max(x- exp,0):min(x+exp, self.cluster_image.shape[0]),max(y- exp,0):min(y+exp,self.cluster_image.shape[1]), 0] = rc3
-        #             self.cluster_image[max(x- exp,0):min(x+exp, self.cluster_image.shape[0]),max(y- exp,0):min(y+exp,self.cluster_image.shape[1]), 1] = rc2
-        #             self.cluster_image[max(x- exp,0):min(x+exp, self.cluster_image.shape[0]),max(y- exp,0):min(y+exp,self.cluster_image.shape[1]), 2] = rc
-        #
-        #
-        #     # if self.show_segmentation:
-        #     for x1, y1, x2, y2, mean_depth in boxes:
-        #         # cv2.putText(self.frame, str(k),(y1,x1+50), self.font, 1,(0,0,0),3 ,cv2.LINE_AA)
-        #         cv2.rectangle(self.frame, (y1, x1), (y2, x2), (125,0,0), 2)
+                mean_depth = self.gmm.means_[0, 3] * self.current_depth_thresh
+                boxes.append([x1, y1, x2, y2, mean_depth])
+
+            # # if self.show_segmentation:
+            for x1, y1, x2, y2, mean_depth in boxes:
+                # print x1, y1, x2, y2
+                # cv2.putText(self.frame, str(k),(y1,x1+50), self.font, 1,(0,0,0),3 ,cv2.LINE_AA)
+                # if x1 <0:
+                #     continue
+                # print x1, y1, x2, y2
+                # cv2.circle(self.frame, (x1, y1), 10, (0,0,255), -1)
+                roi = self.color_image[y1:y2, x1:x2]
+                # print roi.shape
+                fast = cv2.FastFeatureDetector_create()
+                kp = fast.detect(roi,None)
+                # roi=cv2.drawKeypoints(roi,kp, roi)
+                points = np.asarray([point.pt for point in kp])
+                mean = points.mean(axis=0)
+                # cv2.circle(roi, (int(mean[1]), int(mean[0])), 10, (0,255,255), -1)
+                # cv2.imwrite(str(abs(x1))+"roi.png", roi)
 
 
+                # mean = tuple([int(mean[1]), int(mean[0])])
 
-        labimg = cv2.resize(self.mask, None, fx=self.dbscan_scale, fy=self.dbscan_scale, interpolation=cv2.INTER_NEAREST)
-        labimg = cv2.cvtColor(labimg, cv2.COLOR_GRAY2BGR)
-        rows, cols, channels = labimg.shape
+                corners = len(kp)
+                if corners > 400:
+                    try:
+                        radius = int(((x2 - x1) + (y2 - y1))/4)
+                        cv2.circle(self.frame, (x1+int(mean[1]), y1+int(mean[0])), 10, (0,0,255), -1)
+                        cv2.circle(self.frame, (x1+int(mean[1]), y1+int(mean[0])), radius, (0,255,255), 1)
+                        cv2.putText(self.frame, str(corners),(x1+int(mean[1]),y1+int(mean[0])), self.font, 1,(0,200,200),2 ,cv2.LINE_AA)
+                        cv2.putText(self.frame, str("Label"),(x1+int(mean[1]),y1+int(mean[0])-50), self.font, 1,(255,255,255),3 ,cv2.LINE_AA)
+                        # cv2.rectangle(self.frame, (abs(x1), abs(y1)), (x2, y2), (125,0,0), 2)
+                        # cv2.imwrite(str(abs(x1))+"frame.png", self.frame)
+                    except Exception as e:
+                        print e
 
-        indices = np.dstack(np.indices(labimg.shape[:2]))
-        xycolors = np.concatenate((labimg, indices), axis=-1)
-        feature_image = np.reshape(xycolors, [-1,5])
+            # sys.exit()
+        #########
 
-        start =  time.time()
-        # 10 and 50
-        # 5 and 30
-        db = DBSCAN(eps=5, min_samples=30, metric = 'euclidean',algorithm ='auto')
-        db.fit(feature_image)
-        rospy.loginfo("Time for DBSCAN:" + str(time.time() - start))
+        # labimg = cv2.resize(self.mask, None, fx=self.dbscan_scale, fy=self.dbscan_scale, interpolation=cv2.INTER_NEAREST)
+        # labimg = cv2.cvtColor(labimg, cv2.COLOR_GRAY2BGR)
+        # rows, cols, channels = labimg.shape
+        #
+        # indices = np.dstack(np.indices(labimg.shape[:2]))
+        # xycolors = np.concatenate((labimg, indices), axis=-1)
+        # feature_image = np.reshape(xycolors, [-1,5])
+        #
+        # start =  time.time()
+        # # 10 and 50
+        # # 5 and 30
+        # db = DBSCAN(eps=10, min_samples=300, metric = 'euclidean',algorithm ='auto')
+        # db.fit(feature_image)
+        # rospy.loginfo("Time for DBSCAN:" + str(time.time() - start))
+        #
+        # self.labels = db.labels_
 
-        self.labels = db.labels_
-        self.reshaped_img = np.reshape(self.labels, [rows, cols])
+        # self.reshaped_img = np.reshape(self.labels, [rows, cols])
+
         # unique, counts = np.unique(self.reshaped_img, return_counts=True)
-        # for color in unique:
-        # self.reshaped_img[self.reshaped_img == -1] = (255,0,0)
         # print unique
+
 
 
 
@@ -347,7 +322,7 @@ class Camera:
         X[:, 0] = gX.transpose().ravel() * 1.0 / x_size
         X[:, 1] = gY.transpose().ravel() * 1.0 / y_size
         X[:, 2] = mask.ravel()
-        X[:, 3] = self.depth_image.ravel() * 1.0 / self.current_depth_thresh
+        X[:, 3] = self.mask.ravel() * 1.0 / self.current_depth_thresh
         X[:, 4] = gray_image.ravel() * 1.0 / gray_image.max()
         # X = X[X[:, 2] == 1]
         num_samples = X.shape[0]
@@ -382,17 +357,31 @@ class Camera:
             # self.frame = self.color_image
             # self.marker_object.add_marker(320, 240)
             # # frame = cv2.resize(self.color_image, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_NEAREST)
-            self.box()
+            # self.box()
             # x = 200
             # y = 200
             # print "markers------------------"
             # for i in range(0, len(self.marker_object.markerArray.markers)):
             #     print i, self.marker_object.markerArray.markers[i].ns
 
+
+
+            channeled_mask = cv2.cvtColor(self.mask, cv2.COLOR_GRAY2BGR)
+            frame = cv2.resize(self.frame, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
+            channeled_mask = cv2.resize(channeled_mask, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_NEAREST)
+
+
+            blank_image = np.zeros((frame.shape[0]+channeled_mask.shape[0],frame.shape[1],3), np.uint8)
+            blank_image[blank_image==0] = 125
+            blank_image[0:frame.shape[0], 0:frame.shape[1]] = frame
+            blank_image[frame.shape[0]:frame.shape[0] + channeled_mask.shape[0], 0:frame.shape[1]] = channeled_mask
+            cv2.imshow("Split Window", blank_image)
             # cv2.imshow("Frame", self.frame)
+
+
             # cv2.circle(self.hsv,(800,600), 60, (0,0,100), -1)
 
-            cv2.imshow("Frame", self.frame)
+            # cv2.imshow("Mask", self.mask)
             # plt.figure(4)
             # plt.subplot(4, 1, 1)
             # plt.imshow(self.mask)
