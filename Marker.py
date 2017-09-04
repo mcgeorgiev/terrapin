@@ -49,6 +49,8 @@ class Mark_Maker:
 
     def point_cloud_callback(self, msg):
         point_cloud = msg
+
+        print point_cloud.height, point_cloud.width
         self.pc_frame_id = point_cloud.header.frame_id
         if self.pc_frame_id[0] == "/":
             self.pc_frame_id = self.pc_frame_id[1:]
@@ -65,11 +67,14 @@ class Mark_Maker:
         self.translation = self.transform.transform.translation
         self.rotation = self.transform.transform.rotation
         print "recieved point cloud data"
+        # Publish the MarkerArray
+        self.publisher.publish(self.markerArray)
 
     def mark(self, x, y, z):
+        print "MARKER at", x,y,z
         marker = Marker()
         marker.header.frame_id = "/map"
-        marker.type = marker.SPHERE
+        marker.type = marker.TEXT_VIEW_FACING 
         marker.action = marker.ADD
         marker.scale.x = 0.2
         marker.scale.y = 0.2
@@ -121,24 +126,27 @@ class Mark_Maker:
         return res
 
     def add_marker(self, _x, _y):
-        if self.camera == "zed":
-            tmp = _x
-            _x = _y
-            _y = tmp
-        print _y, _x
-        print self.point_3d_array.shape
-
-        x,y,z = self.get_xyz(_x,_y)
+        # if self.camera in ["zed", "kinect2"]:
+        #     tmp = _x
+        #     _x = _y
+        #     _y = tmp
+        try:
+            x,y,z = self.get_xyz(_x,_y)
+        except:
+            return False
         vec = self.to_msg_vector(Vector(x,y,z))
         if self.transform:
             transformed_vec = self.do_transform_vector3(vec, self.transform)
             dx,dy,dz = transformed_vec.vector.x, transformed_vec.vector.y, transformed_vec.vector.z
             existing_marker = self.inside_spheres(dx,dy,dz)
+            if np.isnan(dx) or np.isnan(dy) or np.isnan(dz):
+                return False
             if not self.inside_spheres(dx,dy,dz):
                 self.mark(dx,dy,dz)
                 print "published marker at", _y, _x
                 return False
             else:
+                print "already at location"
                 return existing_marker
                 # self.xyz_to_uv(dx, dy, dz)
 
@@ -166,6 +174,7 @@ class Mark_Maker:
             cy = marker.pose.position.y
             cz = marker.pose.position.z
             if ((x - cx)**2 + (y - cy)**2 + (z - cz)**2) < (self.radius**2):
+                print "*&*&*&*"
                 return marker
         return False
 
